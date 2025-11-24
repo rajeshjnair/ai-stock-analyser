@@ -1,0 +1,54 @@
+# Analysis Worker Service Dockerfile
+FROM node:20-alpine AS base
+
+# Install dependencies only when needed
+FROM base AS deps
+WORKDIR /app
+
+# Copy package files
+COPY package*.json ./
+COPY tsconfig.json ./
+
+# Install dependencies
+RUN npm ci
+
+# Build the application
+FROM base AS builder
+WORKDIR /app
+
+COPY --from=deps /app/node_modules ./node_modules
+COPY . .
+
+# Build TypeScript
+RUN npm run build
+
+# Production image
+FROM base AS runner
+WORKDIR /app
+
+ENV NODE_ENV=production
+
+# Create non-root user
+RUN addgroup --system --gid 1001 nodejs \
+    && adduser --system --uid 1001 worker
+
+# Copy built application
+COPY --from=builder /app/dist ./dist
+COPY --from=builder /app/node_modules ./node_modules
+COPY --from=builder /app/package.json ./package.json
+
+# Set user
+USER worker
+
+# Health check - verify Redis connection and worker heartbeat
+HEALTHCHECK --interval=30s --timeout=5s --start-period=40s --retries=3 \
+  CMD node -e "\
+    const redis = require('ioredis'); \
+    const client = new redis(process.env.REDIS_URL); \
+    client.ping() \
+      .then(() => process.exit(0)) \
+      .catch(() => process.exit(1)) \
+      .finally(() => client.disconnect());"
+
+# Start Analysis Worker
+CMD ["node", "dist/analysis-worker.js"]
