@@ -1,0 +1,64 @@
+version: '3.8'
+
+services:
+  nginx:
+    volumes:
+      - ./nginx/nginx.conf:/etc/nginx/nginx.conf:ro
+      - ./nginx/conf.d:/etc/nginx/conf.d:ro
+      - ./logs/nginx:/var/log/nginx
+
+  redis:
+    ports:
+      - "6379:6379"
+    volumes:
+      - redis_data:/data
+      - ./logs/redis:/var/log/redis
+    command: >
+      redis-server
+      --appendonly yes
+      --maxmemory 256mb
+      --maxmemory-policy allkeys-lru
+      --loglevel verbose
+
+  mongodb:
+    ports:
+      - "27017:27017"
+    volumes:
+      - mongo_data:/data/db
+      - ./mongo-init:/docker-entrypoint-initdb.d:ro
+      - ./logs/mongodb:/var/log/mongodb
+    environment:
+      MONGO_INITDB_ROOT_USERNAME: ${MONGO_USER}
+      MONGO_INITDB_ROOT_PASSWORD: ${MONGO_PASSWORD}
+      MONGO_INITDB_DATABASE: ai_stock_analyzer
+
+  # Development overrides for frontend (uncomment when frontend service is added)
+  # frontend:
+  #   volumes:
+  #     - ./frontend/src:/app/src:ro
+  #     - ./frontend/public:/app/public:ro
+  #   environment:
+  #     - CHOKIDAR_USEPOLLING=true
+  #     - WATCHPACK_POLLING=true
+
+  # Development overrides for backend (uncomment when backend service is added)
+  # backend:
+  #   volumes:
+  #     - ./backend/src:/app/src:ro
+  #     - ./logs/backend:/app/logs
+  #   environment:
+  #     - NODE_ENV=development
+  #     - DEBUG=app:*
+
+  # Development overrides for websocket (uncomment when websocket service is added)
+  # websocket:
+  #   volumes:
+  #     - ./websocket/src:/app/src:ro
+  #     - ./logs/websocket:/app/logs
+  #   environment:
+  #     - NODE_ENV=development
+  #     - DEBUG=ws:*
+
+volumes:
+  redis_data:
+  mongo_data:
